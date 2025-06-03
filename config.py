@@ -1,0 +1,9 @@
+PORTS = [8000, 37777]
+THREADS = 1499
+RANGES_FILE = "ranges.txt"
+OUTPUT_FILE = "ips.txt"
+TIMEOUT = 1.5
+UPDATE_INTERVAL = 0.1
+BATCH_SIZE = 1000000
+autoclear_found_on_start = False
+mode = 2 # 1 - при каждом найденном порте брутить его (возможно только для Dahua камер, для Hikvision автоматически берется второй режим); 2 - после конца поиска портов брутить все айпи разом. Рекомендуется - 2
