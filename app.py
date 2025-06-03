@@ -50,16 +50,19 @@ init(autoreset=True)
 try:
     if len(sys.argv) > 1:
         PORT = int(sys.argv[1])
+        DORECOVERY = sys.argv[2].lower() == 'true'
     else:
-        print("Использование: python app.py <port>")
+        print("Использование: python app.py <port> <dorecovery>")
         print("Порт не представлен аргументом, использую 8000.")
         PORT = getattr(config, 'PORT', 8000)
+        DORECOVERY = getattr(config, 'DORECOVERY', False)
 except ValueError:
     print(f"Ошибка: Порт инвалидный, как и ты: {sys.argv[1]}")
     sys.exit(1)
 except IndexError:
     print("Порт не представлен аргументом, использую 8000.")
     PORT = getattr(config, 'PORT', 8000)
+    DORECOVERY = getattr(config, 'DORECOVERY', False)
 
 THREADS = int(config.THREADS / 2)
 RANGES_FILE = config.RANGES_FILE
@@ -172,6 +175,8 @@ def worker():
             with lock:
                 global checked_ips, successful_ips
                 checked_ips += 1
+                with open(f'recovery{PORT}', 'w') as f:
+                    f.write(f"{ip}\n")
                 if result:
                     successful_ips += 1
                     with open(OUTPUT_FILE, 'a') as f:
@@ -249,50 +254,124 @@ def process_range(start_str, end_str):
 
 def load_ranges():
     global total_ips
-    loaded = 0
+    loaded_ips_list = []
     start_time = time.time()
     ipv6_count = 0
-    
+
     try:
         with open(RANGES_FILE) as f:
             print(COLOR_HEADER + "\n[•] Загрузка диапазонов IP...")
-            
+
             for line_num, line in enumerate(f, 1):
                 if stop_event.is_set():
                     break
-                
+
                 line = line.strip()
                 if not line or line.startswith("#"):
                     continue
-                
+
                 if '-' not in line:
                     with print_lock:
                         print(COLOR_WARNING + f"[!] Пропуск некорректной строки {line_num}: {line}")
                     continue
-                
+
                 try:
                     start_str, end_str = map(str.strip, line.split('-', 1))
                     if ':' in start_str:
                         ipv6_count += 1
                         continue
-                    
-                    count = process_range(start_str, end_str)
-                    loaded += count
-                    
+
+                    for ip in ipv4_range_to_ips(start_str, end_str):
+                        loaded_ips_list.append(ip)
+
                     if time.time() - start_time > 1:
                         with print_lock:
-                            sys.stdout.write(COLOR_PROGRESS + f"\r[•] Загружено {loaded:,} IP")
+                            sys.stdout.write(COLOR_PROGRESS + f"\r[•] Загружено {len(loaded_ips_list):,} IP")
                             sys.stdout.flush()
-                    
+
                 except Exception as e:
                     with print_lock:
                         print(COLOR_ERROR + f"[!] Ошибка в строке {line_num}: {e}")
                     continue
-        
-        total_ips = loaded
+
+        if DORECOVERY:
+            recovery_file_path = f'recovery{PORT}'
+            if os.path.exists(recovery_file_path):
+                file_content = ""
+                try:
+                    with open(recovery_file_path, 'r') as f_recovery_read:
+                        file_content = f_recovery_read.read().strip()
+                except Exception as e:
+                    with print_lock:
+                        print(COLOR_ERROR + f"[!] Ошибка чтения файла восстановления '{recovery_file_path}': {e}. Начинаем с начала.")
+                        
+
+                if file_content == 'all':
+                    if PORT == 8000:
+                        send_to_public_db = config.send_to_public_db
+                        programName = "web-cam-bruteforcer.exe"
+                        command = [programName, "--port", str(PORT)]
+
+                        if send_to_public_db:
+                            command.append("--toDB")
+
+                        if sys.platform.startswith('win'):
+                            subprocess.Popen(["start", "cmd", "/k"] + command, shell=True)
+                        elif sys.platform == 'darwin':
+                            script = f'tell application "Terminal" to do script "{programName} --port {PORT}"'
+                            subprocess.Popen(["osascript", "-e", script])
+                        elif sys.platform.startswith('linux'):
+                            subprocess.Popen(["gnome-terminal", "--"] + command)
+                        else:
+                            print(f"Неподдерживаемая ОС для открытия нового окна. Запуск {programName} в текущем контексте.")
+                            subprocess.Popen(command)
+                    if PORT == 37777:
+                        try:
+                            with open('ips_37777.txt', 'r') as f_ips:
+                                lineNumber = 0
+                                for line in f_ips:
+                                    lineNumber += 1
+                                    programName_multi = "example.exe"
+                                    current_ip_from_file = line.strip(' \t\n\r')
+
+                                    print(f"Запуск {programName_multi} с IP: {current_ip_from_file}")
+                                    p_multi = subprocess.Popen([programName_multi, current_ip_from_file])
+
+                                    if lineNumber % 15 == 0:
+                                        time.sleep(30)
+                        except FileNotFoundError:
+                            print("Ошибка: Файл 'ips_37777.txt' не найден.")
+                        except Exception as e:
+                            print(f"Ошибка при обработке ips_37777.txt: {e}")
+                    sys.exit(1)
+                    return
+
+                elif file_content:
+                    with print_lock:
+                        print(COLOR_WARNING + f"\n[!] Режим восстановления: последний IP '{file_content}' из {recovery_file_path}")
+
+                    try:
+                        last_ip_index = loaded_ips_list.index(file_content)
+                        loaded_ips_list = loaded_ips_list[last_ip_index + 1:]
+                        with print_lock:
+                            print(COLOR_SUCCESS + f"[✓] Удалено {last_ip_index + 1} IP-адресов из очереди.")
+                    except ValueError:
+                        with print_lock:
+                            print(COLOR_WARNING + f"[!] Последний IP '{file_content}' не найден в текущих диапазонах. Начинаем с начала.")
+                else:
+                    with print_lock:
+                        print(COLOR_WARNING + f"\n[!] Файл восстановления '{recovery_file_path}' пуст. Начинаем с начала.")
+            else:
+                with print_lock:
+                    print(COLOR_WARNING + f"[!] Файл восстановления '{recovery_file_path}' не найден. Начинаем с начала.")
+
+        for ip in loaded_ips_list:
+            ip_queue.put(ip)
+
+        total_ips = len(loaded_ips_list)
         duration = time.time() - start_time
         with print_lock:
-            print(COLOR_SUCCESS + f"\n[✓] Успешно загружено {loaded:,} IP ({loaded/duration:,.0f} IP/сек)")
+            print(COLOR_SUCCESS + f"\n[✓] Успешно загружено {total_ips:,} IP ({total_ips/duration:,.0f} IP/сек)")
             if ipv6_count > 0:
                 print(COLOR_WARNING + f"[•] Пропущено {ipv6_count} IPv6 диапазонов")
             print(COLOR_HEADER + "-" * 60)
@@ -348,8 +427,12 @@ def main():
     
     stop_event.set()
     if PORT == 8000:
+        send_to_public_db = config.send_to_public_db
         programName = "web-cam-bruteforcer.exe"
         command = [programName, "--port", str(PORT)]
+
+        if send_to_public_db:
+            command.append("--toDB")
 
         if sys.platform.startswith('win'):
             subprocess.Popen(["start", "cmd", "/k"] + command, shell=True)
@@ -380,6 +463,9 @@ def main():
                 print("Ошибка: Файл 'ips_37777.txt' не найден.")
             except Exception as e:
                 print(f"Ошибка при обработке ips_37777.txt: {e}")
+
+    with open(f'recovery{PORT}', 'w') as f:
+        f.write(f"all\n")
     print(COLOR_SUCCESS + "\n[✓] Сканирование завершено!")
     print(COLOR_HEADER + "-" * 60)
     print(COLOR_TITLE + f"Всего проверено: {checked_ips}")
