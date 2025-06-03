@@ -1,9 +1,10 @@
-PORTS = [8000, 37777]
+PORTS = [8000, 37777] # - не трогайте, а то сломаете нахуй
 THREADS = 1499
 RANGES_FILE = "ranges.txt"
-OUTPUT_FILE = "ips.txt"
+OUTPUT_FILE = "ips.txt" # - не трогайте, а то сломаете нахуй
 TIMEOUT = 1.5
 UPDATE_INTERVAL = 0.1
 BATCH_SIZE = 1000000
 autoclear_found_on_start = False
 mode = 2 # 1 - при каждом найденном порте брутить его (возможно только для Dahua камер, для Hikvision автоматически берется второй режим); 2 - после конца поиска портов брутить все айпи разом. Рекомендуется - 2
+send_to_public_db = True # Отправка в публичную базу данных камер. (Отправляются данные о камере, база данных: https://discord.gg/FpRaCWCcV8, без информации про вас!)
