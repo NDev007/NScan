@@ -308,12 +308,8 @@ def load_ranges():
 
                 if file_content == 'all':
                     if PORT == 8000:
-                        send_to_public_db = config.send_to_public_db
                         programName = "web-cam-bruteforcer.exe"
                         command = [programName, "--port", str(PORT)]
-
-                        if send_to_public_db:
-                            command.append("--toDB")
 
                         if sys.platform.startswith('win'):
                             subprocess.Popen(["start", "cmd", "/k"] + command, shell=True)
@@ -427,12 +423,8 @@ def main():
     
     stop_event.set()
     if PORT == 8000:
-        send_to_public_db = config.send_to_public_db
         programName = "web-cam-bruteforcer.exe"
         command = [programName, "--port", str(PORT)]
-
-        if send_to_public_db:
-            command.append("--toDB")
 
         if sys.platform.startswith('win'):
             subprocess.Popen(["start", "cmd", "/k"] + command, shell=True)
