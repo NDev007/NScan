@@ -1,7 +1,7 @@
-PORTS = [8000, 37777] # - не трогайте, а то сломаете нахуй
+PORTS = [8000, 37777]
 THREADS = 1499
 RANGES_FILE = "ranges.txt"
-OUTPUT_FILE = "ips.txt" # - не трогайте, а то сломаете нахуй
+OUTPUT_FILE = "ips.txt"
 TIMEOUT = 1.5
 UPDATE_INTERVAL = 0.1
 BATCH_SIZE = 1000000
